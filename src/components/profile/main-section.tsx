@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable"
@@ -23,8 +23,6 @@ interface CardData {
     imageUrl?: string
     width?: number
     height?: number
-    gridColumn?: string
-    gridRow?: string
 }
 
 // Create a component for the sortable card
@@ -33,20 +31,34 @@ function SortableCard({ card, onDelete, onResize }: {
     onDelete: (id: string) => void;
     onResize: (id: string, width: number, height: number) => void;
 }) {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: card.id })
-    const [isHovered, setIsHovered] = useState(false)
-    const [isResizing, setIsResizing] = useState(false)
-    const initialPos = useRef({ x: 0, y: 0 })
-    const initialSize = useRef({ width: 0, height: 0 })
-    const cardRef = useRef<HTMLDivElement>(null)
+    const [isResizing, setIsResizing] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
+    const initialPos = useRef({ x: 0, y: 0 });
+    const initialSize = useRef({ width: 0, height: 0 });
+    const cardRef = useRef<HTMLDivElement>(null);
 
+    // Setup sortable hooks with disabled property
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({
+        id: card.id,
+        disabled: isResizing // Disable dragging while resizing
+    });
+
+    // Apply styles conditionally
     const style = {
         transform: CSS.Transform.toString(transform),
         transition: isResizing ? undefined : transition,
         width: card.width ? `${card.width}px` : "100%",
         height: card.height ? `${card.height}px` : "auto",
-    }
+    };
 
+    // Handle resize start
     const handleResizeStart = (e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
@@ -58,38 +70,49 @@ function SortableCard({ card, onDelete, onResize }: {
                 width: cardRef.current.offsetWidth,
                 height: cardRef.current.offsetHeight
             };
-
-            const handleMouseMove = (e: MouseEvent) => {
-                if (isResizing && cardRef.current) {
-                    const deltaX = e.clientX - initialPos.current.x;
-                    const deltaY = e.clientY - initialPos.current.y;
-
-                    const newWidth = Math.max(150, initialSize.current.width + deltaX);
-                    const newHeight = Math.max(150, initialSize.current.height + deltaY);
-
-                    cardRef.current.style.width = `${newWidth}px`;
-                    cardRef.current.style.height = `${newHeight}px`;
-                }
-            };
-
-            const handleMouseUp = () => {
-                setIsResizing(false);
-                if (cardRef.current) {
-                    onResize(
-                        card.id,
-                        cardRef.current.offsetWidth,
-                        cardRef.current.offsetHeight
-                    );
-                }
-
-                document.removeEventListener('mousemove', handleMouseMove);
-                document.removeEventListener('mouseup', handleMouseUp);
-            };
-
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
         }
     };
+
+    // Handle resize move and end using useEffect
+    useEffect(() => {
+        if (!isResizing) return;
+
+        // Mouse move handler
+        const handleMouseMove = (e: MouseEvent) => {
+            if (cardRef.current) {
+                const deltaX = e.clientX - initialPos.current.x;
+                const deltaY = e.clientY - initialPos.current.y;
+
+                const newWidth = Math.max(150, initialSize.current.width + deltaX);
+                const newHeight = Math.max(150, initialSize.current.height + deltaY);
+
+                cardRef.current.style.width = `${newWidth}px`;
+                cardRef.current.style.height = `${newHeight}px`;
+            }
+        };
+
+        // Mouse up handler
+        const handleMouseUp = () => {
+            setIsResizing(false);
+            if (cardRef.current) {
+                onResize(
+                    card.id,
+                    cardRef.current.offsetWidth,
+                    cardRef.current.offsetHeight
+                );
+            }
+        };
+
+        // Add event listeners
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Clean up
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizing, card.id, onResize]);
 
     return (
         <div
@@ -100,7 +123,7 @@ function SortableCard({ card, onDelete, onResize }: {
                 }
             }}
             style={style}
-            className="relative touch-manipulation"
+            className={`relative touch-manipulation ${isDragging ? 'z-10' : ''}`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             {...(isResizing ? {} : attributes)}
@@ -199,7 +222,7 @@ function SortableCard({ card, onDelete, onResize }: {
             {/* Delete button that appears on hover */}
             {isHovered && (
                 <button
-                    className="absolute top-2 right-2 bg-red-100 hover:bg-red-200 rounded-full p-1 transition-colors"
+                    className="absolute top-2 right-2 bg-red-100 hover:bg-red-200 rounded-full p-1 transition-colors z-10"
                     onClick={(e) => {
                         e.stopPropagation();
                         onDelete(card.id);
@@ -212,14 +235,14 @@ function SortableCard({ card, onDelete, onResize }: {
             {/* Resize handle */}
             {isHovered && (
                 <div
-                    className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center"
+                    className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center z-10"
                     onMouseDown={handleResizeStart}
                 >
                     <ChevronsUpDown className="h-4 w-4 text-gray-500 rotate-45" />
                 </div>
             )}
         </div>
-    )
+    );
 }
 
 export default function ProfilePage() {
@@ -241,7 +264,7 @@ export default function ProfilePage() {
             imageUrl: "/placeholder.svg?height=80&width=150",
         },
         { id: "6", type: "ios", title: "iOS UI Kit" },
-    ])
+    ]);
 
     // Handle card deletion
     const handleDeleteCard = (id: string) => {
@@ -250,19 +273,9 @@ export default function ProfilePage() {
 
     // Handle card resizing
     const handleResizeCard = (id: string, width: number, height: number) => {
-        // Update card dimensions
-        const updatedCards = cards.map(card => {
-            if (card.id === id) {
-                // Calculate grid spans based on size
-                const gridColumn = width > 300 ? "span 2" : "span 1";
-                const gridRow = height > 300 ? "span 2" : "span 1";
-
-                return { ...card, width, height, gridColumn, gridRow };
-            }
-            return card;
-        });
-
-        setCards(updatedCards);
+        setCards(cards.map(card =>
+            card.id === id ? { ...card, width, height } : card
+        ));
     };
 
     // Handle card duplication
@@ -289,19 +302,19 @@ export default function ProfilePage() {
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         }),
-    )
+    );
 
     // Handle DnD end event
     function handleDragEnd(event: any) {
-        const { active, over } = event
+        const { active, over } = event;
 
         if (active.id !== over.id) {
             setCards((items) => {
-                const oldIndex = items.findIndex((item) => item.id === active.id)
-                const newIndex = items.findIndex((item) => item.id === over.id)
+                const oldIndex = items.findIndex((item) => item.id === active.id);
+                const newIndex = items.findIndex((item) => item.id === over.id);
 
-                return arrayMove(items, oldIndex, newIndex)
-            })
+                return arrayMove(items, oldIndex, newIndex);
+            });
         }
     }
 
@@ -330,29 +343,14 @@ export default function ProfilePage() {
                     <div className="md:w-2/3">
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <SortableContext items={cards.map((card) => card.id)}>
-                                <div
-                                    style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                                        gap: "1rem",
-                                        gridAutoRows: "auto",
-                                        gridAutoFlow: "dense"
-                                    }}
-                                >
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {cards.map((card) => (
-                                        <div
+                                        <SortableCard
                                             key={card.id}
-                                            style={{
-                                                gridColumn: card.gridColumn || "span 1",
-                                                gridRow: card.gridRow || "span 1"
-                                            }}
-                                        >
-                                            <SortableCard
-                                                card={card}
-                                                onDelete={handleDeleteCard}
-                                                onResize={handleResizeCard}
-                                            />
-                                        </div>
+                                            card={card}
+                                            onDelete={handleDeleteCard}
+                                            onResize={handleResizeCard}
+                                        />
                                     ))}
                                 </div>
                             </SortableContext>
@@ -370,5 +368,5 @@ export default function ProfilePage() {
                 </DialogTrigger>
             </Dialog>
         </div>
-    )
+    );
 }
