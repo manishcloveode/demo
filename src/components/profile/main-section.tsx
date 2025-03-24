@@ -23,6 +23,8 @@ interface CardData {
     imageUrl?: string
     width?: number
     height?: number
+    gridColumn?: string
+    gridRow?: string
 }
 
 // Create a component for the sortable card
@@ -248,9 +250,19 @@ export default function ProfilePage() {
 
     // Handle card resizing
     const handleResizeCard = (id: string, width: number, height: number) => {
-        setCards(cards.map(card =>
-            card.id === id ? { ...card, width, height } : card
-        ));
+        // Update card dimensions
+        const updatedCards = cards.map(card => {
+            if (card.id === id) {
+                // Calculate grid spans based on size
+                const gridColumn = width > 300 ? "span 2" : "span 1";
+                const gridRow = height > 300 ? "span 2" : "span 1";
+
+                return { ...card, width, height, gridColumn, gridRow };
+            }
+            return card;
+        });
+
+        setCards(updatedCards);
     };
 
     // Handle card duplication
@@ -266,7 +278,6 @@ export default function ProfilePage() {
             setCards([...cards, newCard]);
         }
     };
-
 
     // Set up DnD sensors
     const sensors = useSensors(
@@ -319,14 +330,29 @@ export default function ProfilePage() {
                     <div className="md:w-2/3">
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                             <SortableContext items={cards.map((card) => card.id)}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div
+                                    style={{
+                                        display: "grid",
+                                        gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                                        gap: "1rem",
+                                        gridAutoRows: "auto",
+                                        gridAutoFlow: "dense"
+                                    }}
+                                >
                                     {cards.map((card) => (
-                                        <SortableCard
+                                        <div
                                             key={card.id}
-                                            card={card}
-                                            onDelete={handleDeleteCard}
-                                            onResize={handleResizeCard}
-                                        />
+                                            style={{
+                                                gridColumn: card.gridColumn || "span 1",
+                                                gridRow: card.gridRow || "span 1"
+                                            }}
+                                        >
+                                            <SortableCard
+                                                card={card}
+                                                onDelete={handleDeleteCard}
+                                                onResize={handleResizeCard}
+                                            />
+                                        </div>
                                     ))}
                                 </div>
                             </SortableContext>
@@ -334,17 +360,15 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
-            <Dialog >
-                <DialogTrigger >
+            <Dialog>
+                <DialogTrigger>
                     <Button
                         onClick={handleDuplicateCard}
                         className="h-14 w-14 rounded-full fixed bottom-6 right-6 shadow-lg" size="icon">
                         <Plus className="h-6 w-6" />
                     </Button>
                 </DialogTrigger>
-
             </Dialog>
         </div>
     )
 }
-
