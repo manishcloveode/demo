@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Dialog, DialogTrigger } from "@/components/ui/dialog"
 import { DragEndEvent } from "@dnd-kit/core";
+
 // Define the card data structure
 interface CardData {
     id: string
@@ -23,13 +24,16 @@ interface CardData {
     imageUrl?: string
     width?: number
     height?: number
+    gridColumn?: number
+    gridRow?: number
 }
 
 // Create a component for the sortable card
-function SortableCard({ card, onDelete, onResize }: {
+function SortableCard({ card, onDelete, onResize, gridSize }: {
     card: CardData;
     onDelete: (id: string) => void;
-    onResize: (id: string, width: number, height: number) => void;
+    onResize: (id: string, width: number, height: number, gridColumn: number) => void;
+    gridSize: { columns: number, gap: number };
 }) {
     const [isResizing, setIsResizing] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
@@ -56,6 +60,29 @@ function SortableCard({ card, onDelete, onResize }: {
         transition: isResizing ? undefined : transition,
         width: card.width ? `${card.width}px` : "100%",
         height: card.height ? `${card.height}px` : "auto",
+        // Use grid span if defined
+        gridColumn: card.gridColumn ? `span ${card.gridColumn}` : undefined,
+        gridRow: card.gridRow ? `span ${card.gridRow}` : undefined,
+    };
+
+    // Calculate grid span based on card size
+    const calculateGridSpan = (width: number) => {
+        if (!gridSize.columns) return 1;
+
+        // Get the container width (approximation based on columns and gap)
+        const containerWidth = cardRef.current?.parentElement?.offsetWidth || 0;
+        if (containerWidth === 0) return 1;
+
+        // Calculate single column width (container width - total gaps) / columns
+        const singleColWidth = (containerWidth - (gridSize.gap * (gridSize.columns - 1))) / gridSize.columns;
+
+        // Determine how many columns this card should span (rounded up)
+        const span = Math.max(1, Math.min(
+            gridSize.columns,
+            Math.ceil((width + gridSize.gap) / (singleColWidth + gridSize.gap))
+        ));
+
+        return span;
     };
 
     // Handle resize start
@@ -95,10 +122,18 @@ function SortableCard({ card, onDelete, onResize }: {
         const handleMouseUp = () => {
             setIsResizing(false);
             if (cardRef.current) {
+                const newWidth = cardRef.current.offsetWidth;
+                const newHeight = cardRef.current.offsetHeight;
+
+                // Calculate grid spans
+                const gridColumn = calculateGridSpan(newWidth);
+
+                // Update with new dimensions and grid spans
                 onResize(
                     card.id,
-                    cardRef.current.offsetWidth,
-                    cardRef.current.offsetHeight
+                    newWidth,
+                    newHeight,
+                    gridColumn
                 );
             }
         };
@@ -112,7 +147,7 @@ function SortableCard({ card, onDelete, onResize }: {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isResizing, card.id, onResize]);
+    }, [isResizing, card.id, onResize, gridSize]);
 
     return (
         <div
@@ -249,12 +284,40 @@ export default function ProfilePage() {
     // Generate a unique ID
     const generateId = () => Math.random().toString(36).substring(2, 9);
 
+    // Grid configuration
+    const [gridSize, setGridSize] = useState({
+        columns: 3,  // Default for lg screens
+        gap: 16      // 4 in tailwind = 16px
+    });
+
+    // Update grid size based on screen width
+    useEffect(() => {
+        const updateGridSize = () => {
+            if (window.innerWidth >= 1024) {
+                setGridSize({ columns: 3, gap: 16 }); // lg:grid-cols-3
+            } else if (window.innerWidth >= 640) {
+                setGridSize({ columns: 2, gap: 16 }); // sm:grid-cols-2
+            } else {
+                setGridSize({ columns: 1, gap: 16 }); // grid-cols-1
+            }
+        };
+
+        // Initial setup
+        updateGridSize();
+
+        // Listen for window resize
+        window.addEventListener('resize', updateGridSize);
+
+        // Cleanup
+        return () => window.removeEventListener('resize', updateGridSize);
+    }, []);
+
     // Initial cards data
     const [cards, setCards] = useState<CardData[]>([
-        { id: "1", type: "twitter", title: "My Tweeet's", buttonText: "Follow" },
-        { id: "2", type: "youtube", title: "Some Tutorials", buttonText: "Subscribe" },
-        { id: "3", type: "github", title: "Github" },
-        { id: "4", type: "coffee", title: "Buy me a Coffee", buttonText: "Support" },
+        { id: "1", type: "twitter", title: "My Tweeet's", buttonText: "Follow", gridColumn: 1 },
+        { id: "2", type: "youtube", title: "Some Tutorials", buttonText: "Subscribe", gridColumn: 1 },
+        { id: "3", type: "github", title: "Github", gridColumn: 1 },
+        { id: "4", type: "coffee", title: "Buy me a Coffee", buttonText: "Support", gridColumn: 1 },
         {
             id: "5",
             type: "mastodon",
@@ -262,8 +325,9 @@ export default function ProfilePage() {
             subtitle: "by Tapbots",
             buttonText: "Get",
             imageUrl: "/placeholder.svg?height=80&width=150",
+            gridColumn: 1
         },
-        { id: "6", type: "ios", title: "iOS UI Kit" },
+        { id: "6", type: "ios", title: "iOS UI Kit", gridColumn: 1 },
     ]);
 
     // Handle card deletion
@@ -271,10 +335,10 @@ export default function ProfilePage() {
         setCards(cards.filter(card => card.id !== id));
     };
 
-    // Handle card resizing
-    const handleResizeCard = (id: string, width: number, height: number) => {
+    // Handle card resizing with grid columns
+    const handleResizeCard = (id: string, width: number, height: number, gridColumn: number) => {
         setCards(cards.map(card =>
-            card.id === id ? { ...card, width, height } : card
+            card.id === id ? { ...card, width, height, gridColumn } : card
         ));
     };
 
@@ -304,11 +368,10 @@ export default function ProfilePage() {
         }),
     );
 
-
-    function handleDragEnd(event: DragEndEvent) {  // ✅ Correct type
+    function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event;
 
-        if (over && active.id !== over.id) {  // Ensure 'over' is not null
+        if (over && active.id !== over.id) {
             setCards((items) => {
                 const oldIndex = items.findIndex((item) => item.id === active.id);
                 const newIndex = items.findIndex((item) => item.id === over.id);
@@ -317,6 +380,7 @@ export default function ProfilePage() {
             });
         }
     }
+
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
@@ -349,6 +413,7 @@ export default function ProfilePage() {
                                             card={card}
                                             onDelete={handleDeleteCard}
                                             onResize={handleResizeCard}
+                                            gridSize={gridSize}
                                         />
                                     ))}
                                 </div>
