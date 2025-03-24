@@ -11,7 +11,7 @@ import { Plus, Twitter, Youtube, Github, Coffee, Smartphone, Trash2, ChevronsUpD
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Dialog, DialogTrigger } from "@/components/ui/dialog"
-
+import { DragEndEvent } from "@dnd-kit/core";
 // Define the card data structure
 interface CardData {
     id: string
@@ -304,11 +304,11 @@ export default function ProfilePage() {
         }),
     );
 
-    // Handle DnD end event
-    function handleDragEnd(event: any) {
+
+    function handleDragEnd(event: DragEndEvent) {  // ✅ Correct type
         const { active, over } = event;
 
-        if (active.id !== over.id) {
+        if (over && active.id !== over.id) {  // Ensure 'over' is not null
             setCards((items) => {
                 const oldIndex = items.findIndex((item) => item.id === active.id);
                 const newIndex = items.findIndex((item) => item.id === over.id);
@@ -317,7 +317,6 @@ export default function ProfilePage() {
             });
         }
     }
-
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
