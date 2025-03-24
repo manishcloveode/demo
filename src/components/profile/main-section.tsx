@@ -7,10 +7,10 @@ import Image from "next/image"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Plus, Twitter, Youtube, Github, Coffee, Smartphone, Monitor, Trash2, ChevronsUpDown } from "lucide-react"
+import { Plus, Twitter, Youtube, Github, Coffee, Smartphone, Trash2, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogTrigger } from "@/components/ui/dialog"
 
 // Define the card data structure
 interface CardData {
